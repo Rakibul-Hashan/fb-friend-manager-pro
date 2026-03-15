@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "FB Friend Manager Pro",
+  "version": "2.0.0",
+  "description": "Bulk friend request manager with visual selector picker and anti-ban safety.",
+  "permissions": [
+    "storage",
+    "alarms",
+    "notifications",
+    "tabs",
+    "scripting",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://www.facebook.com/*",
+    "https://web.facebook.com/*"
+  ],
+  "background": {
+    "service_worker": "background/service-worker.js"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "FB Friend Manager Pro",
+    "default_icon": {
+      "16": "assets/icons/icon16.png",
+      "48": "assets/icons/icon48.png",
+      "128": "assets/icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "assets/icons/icon16.png",
+    "48": "assets/icons/icon48.png",
+    "128": "assets/icons/icon128.png"
+  }
+}

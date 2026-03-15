@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>FB Friend Manager Pro</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="popup.css"/>
+</head>
+<body>
+
+<!-- ── Header ─────────────────────────────────────────────── -->
+<header class="app-header">
+  <div class="header-brand">
+    <div class="brand-icon">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="9" cy="7" r="4" stroke="currentColor" stroke-width="2"/>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div>
+      <div class="brand-title">Friend Manager <span class="brand-pro">PRO</span></div>
+      <div class="brand-sub" id="tabStatus">Checking tab…</div>
+    </div>
+  </div>
+  <div class="status-badge">
+    <span class="status-dot" id="statusDot"></span>
+    <span id="statusText">Idle</span>
+  </div>
+</header>
+
+<!-- ── Quota bar ──────────────────────────────────────────── -->
+<section class="quota-section">
+  <div class="quota-header">
+    <span class="quota-label">Daily Quota</span>
+    <span class="quota-count"><span id="quotaUsed">0</span> / <span id="quotaLimit">20</span></span>
+  </div>
+  <div class="quota-bar-track"><div class="quota-bar-fill" id="quotaFill" style="width:0%"></div></div>
+  <div class="quota-reset">Resets <span id="quotaReset">at midnight</span></div>
+</section>
+
+<!-- ── Tabs ───────────────────────────────────────────────── -->
+<nav class="tab-nav">
+  <button class="tab-btn active" data-tab="ops">Operations</button>
+  <button class="tab-btn" data-tab="selectors">Selectors</button>
+  <button class="tab-btn" data-tab="settings">Settings</button>
+  <button class="tab-btn" data-tab="logs">Logs</button>
+</nav>
+
+<!-- ════════════ TAB: Operations ════════════ -->
+<div class="tab-content active" id="tab-ops">
+
+  <!-- Running state -->
+  <div class="running-block hidden" id="runningBlock">
+    <div class="running-label" id="runningLabel">Working…</div>
+    <div class="running-hint" id="runningHint">Watch the Facebook tab for progress</div>
+    <button class="btn-stop" id="btnStop">■ Stop</button>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-value" id="stSent">0</div><div class="stat-label">Sent</div></div>
+    <div class="stat-card"><div class="stat-value green" id="stAccepted">0</div><div class="stat-label">Accepted</div></div>
+    <div class="stat-card"><div class="stat-value amber" id="stWithdrawn">0</div><div class="stat-label">Withdrawn</div></div>
+    <div class="stat-card"><div class="stat-value muted" id="stSkipped">0</div><div class="stat-label">Skipped</div></div>
+  </div>
+
+  <div class="op-group-title">Run Operation</div>
+
+  <!-- Send -->
+  <div class="op-card" id="opSend">
+    <div class="op-card-left">
+      <div class="op-icon blue">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="9" cy="7" r="4" stroke="currentColor" stroke-width="2"/>
+          <line x1="19" y1="8" x2="19" y2="14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <line x1="22" y1="11" x2="16" y2="11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div>
+        <div class="op-name">Bulk Send Requests</div>
+        <div class="op-hint">Go to: facebook.com/friends/suggestions</div>
+        <div class="op-sel-preview" id="selPreviewSend">⚠ No selector — click 🎯 Pick first</div>
+      </div>
+    </div>
+    <button class="btn-run" id="btnRunSend">▶ Run</button>
+  </div>
+
+  <!-- Accept -->
+  <div class="op-card" id="opAccept">
+    <div class="op-card-left">
+      <div class="op-icon green">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+          <polyline points="20 6 9 17 4 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div>
+        <div class="op-name">Bulk Accept Requests</div>
+        <div class="op-hint">Go to: facebook.com/friends/requests</div>
+        <div class="op-sel-preview" id="selPreviewAccept">⚠ No selector — click 🎯 Pick first</div>
+      </div>
+    </div>
+    <button class="btn-run" id="btnRunAccept">▶ Run</button>
+  </div>
+
+  <!-- Withdraw -->
+  <div class="op-card" id="opWithdraw">
+    <div class="op-card-left">
+      <div class="op-icon amber">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+          <line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div>
+        <div class="op-name">Auto-Withdraw Sent</div>
+        <div class="op-hint">Go to: facebook.com/friends/sent</div>
+        <div class="op-sel-preview" id="selPreviewWithdraw">⚠ No selector — click 🎯 Pick first</div>
+      </div>
+    </div>
+    <button class="btn-run" id="btnRunWithdraw">▶ Run</button>
+  </div>
+
+</div>
+
+<!-- ════════════ TAB: Selectors ════════════ -->
+<div class="tab-content" id="tab-selectors">
+  <div class="sel-intro">
+    Click <strong>🎯 Pick</strong>, then click any button on the Facebook page.
+    The extension will learn its selector automatically.
+  </div>
+
+  <div class="sel-card">
+    <div class="sel-card-top">
+      <div>
+        <div class="sel-card-title blue">Send Request Button</div>
+        <div class="sel-card-page">On: facebook.com/friends/suggestions</div>
+      </div>
+      <button class="btn-pick" data-mode="send">🎯 Pick</button>
+    </div>
+    <div class="sel-display" id="sdSend">Not set</div>
+    <button class="btn-clear-sel" data-mode="send">Clear</button>
+  </div>
+
+  <div class="sel-card">
+    <div class="sel-card-top">
+      <div>
+        <div class="sel-card-title green">Accept Request Button</div>
+        <div class="sel-card-page">On: facebook.com/friends/requests</div>
+      </div>
+      <button class="btn-pick" data-mode="accept">🎯 Pick</button>
+    </div>
+    <div class="sel-display" id="sdAccept">Not set</div>
+    <button class="btn-clear-sel" data-mode="accept">Clear</button>
+  </div>
+
+  <div class="sel-card">
+    <div class="sel-card-top">
+      <div>
+        <div class="sel-card-title amber">Withdraw / Cancel Button</div>
+        <div class="sel-card-page">On: facebook.com/friends/sent</div>
+      </div>
+      <button class="btn-pick" data-mode="withdraw">🎯 Pick</button>
+    </div>
+    <div class="sel-display" id="sdWithdraw">Not set</div>
+    <button class="btn-clear-sel" data-mode="withdraw">Clear</button>
+  </div>
+
+  <div class="sel-note">
+    💡 After clicking 🎯 Pick, the popup closes. Look for the blue floating panel on the Facebook page.
+  </div>
+</div>
+
+<!-- ════════════ TAB: Settings ════════════ -->
+<div class="tab-content" id="tab-settings">
+  <div class="settings-group">
+    <div class="sg-title">Rate Limiting</div>
+    <div class="setting-row">
+      <label>Daily Action Limit</label>
+      <div class="setting-ctrl"><input type="number" id="sDaily" min="1" max="50" value="20"/><span>/ day</span></div>
+    </div>
+    <div class="setting-row">
+      <label>Min Delay</label>
+      <div class="setting-ctrl"><input type="number" id="sMinDelay" min="1" max="60" value="3"/><span>sec</span></div>
+    </div>
+    <div class="setting-row">
+      <label>Max Delay</label>
+      <div class="setting-ctrl"><input type="number" id="sMaxDelay" min="5" max="120" value="12"/><span>sec</span></div>
+    </div>
+  </div>
+  <div class="settings-group">
+    <div class="sg-title">Safety</div>
+    <div class="toggle-row">
+      <div><div class="tl">Auto-pause on CAPTCHA</div><div class="td">Stop if CAPTCHA appears</div></div>
+      <label class="toggle"><input type="checkbox" id="tCaptcha" checked/><span class="knob"></span></label>
+    </div>
+    <div class="toggle-row">
+      <div><div class="tl">Auto-pause on warning</div><div class="td">Stop on FB rate-limit warning</div></div>
+      <label class="toggle"><input type="checkbox" id="tWarning" checked/><span class="knob"></span></label>
+    </div>
+    <div class="toggle-row">
+      <div><div class="tl">Random scroll</div><div class="td">Scroll between actions</div></div>
+      <label class="toggle"><input type="checkbox" id="tScroll" checked/><span class="knob"></span></label>
+    </div>
+  </div>
+  <div class="settings-group">
+    <div class="sg-title">Whitelist / Blacklist</div>
+    <div class="list-row">
+      <label>Whitelist <span class="list-hint">(only these users)</span></label>
+      <textarea id="tWhitelist" placeholder="One username or ID per line"></textarea>
+    </div>
+    <div class="list-row">
+      <label>Blacklist <span class="list-hint">(never touch these)</span></label>
+      <textarea id="tBlacklist" placeholder="One username or ID per line"></textarea>
+    </div>
+  </div>
+  <div class="save-row">
+    <button class="btn-save" id="btnSave">Save Settings</button>
+    <span class="save-ok hidden" id="saveOk">✓ Saved</span>
+  </div>
+</div>
+
+<!-- ════════════ TAB: Logs ════════════ -->
+<div class="tab-content" id="tab-logs">
+  <div class="logs-bar">
+    <span id="logsCount">0 entries</span>
+    <button class="btn-clear-logs" id="btnClearLogs">Clear</button>
+  </div>
+  <div class="log-list" id="logList">
+    <div class="log-empty">No activity yet.</div>
+  </div>
+</div>
+
+<footer class="app-footer">⚠️ Use responsibly · FB ToS at your own risk</footer>
+
+<script src="popup.js"></script>
+</body>
+</html>
