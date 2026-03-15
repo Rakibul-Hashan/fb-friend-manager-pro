@@ -1,0 +1,88 @@
+name: 🔍 PR Validation
+
+# Runs on every Pull Request — catches bad versions before merge
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    name: ✅ Validate Extension
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate manifest.json
+        run: |
+          echo "🔍 Validating manifest.json..."
+
+          # Check it's valid JSON
+          jq . fb-extension/manifest.json > /dev/null && echo "✅ Valid JSON"
+
+          # Check required fields
+          NAME=$(jq -r '.name' fb-extension/manifest.json)
+          VERSION=$(jq -r '.version' fb-extension/manifest.json)
+          MV=$(jq -r '.manifest_version' fb-extension/manifest.json)
+
+          echo "  Name:             $NAME"
+          echo "  Version:          $VERSION"
+          echo "  Manifest version: $MV"
+
+          # Validate semver format
+          if echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "✅ Version format valid: $VERSION"
+          else
+            echo "❌ Invalid version format: $VERSION (must be X.Y.Z)"
+            exit 1
+          fi
+
+          # Warn if version already released
+          TAG="v$VERSION"
+          if git ls-remote --tags origin | grep -q "refs/tags/$TAG$"; then
+            echo "⚠️ WARNING: Tag $TAG already exists — bump the version before merging!"
+          else
+            echo "✅ Version $TAG is new and ready to release"
+          fi
+
+      - name: Check all required files exist
+        run: |
+          REQUIRED=(
+            "fb-extension/manifest.json"
+            "fb-extension/background/service-worker.js"
+            "fb-extension/content/picker.js"
+            "fb-extension/content/runner.js"
+            "fb-extension/popup/popup.html"
+            "fb-extension/popup/popup.css"
+            "fb-extension/popup/popup.js"
+            "fb-extension/assets/icons/icon16.png"
+            "fb-extension/assets/icons/icon48.png"
+            "fb-extension/assets/icons/icon128.png"
+            "docs/index.html"
+            "README.md"
+          )
+
+          ALL_OK=true
+          for FILE in "${REQUIRED[@]}"; do
+            if [ -f "$FILE" ]; then
+              echo "✅ $FILE"
+            else
+              echo "❌ MISSING: $FILE"
+              ALL_OK=false
+            fi
+          done
+
+          if [ "$ALL_OK" = false ]; then
+            echo "❌ Required files missing — fix before merging"
+            exit 1
+          fi
+
+      - name: Test ZIP packaging
+        run: |
+          cd fb-extension
+          zip -r "../test-package.zip" . -x "*.DS_Store"
+          cd ..
+          SIZE=$(du -sh test-package.zip | cut -f1)
+          echo "✅ Package builds successfully: $SIZE"
+          rm test-package.zip

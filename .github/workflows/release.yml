@@ -1,0 +1,276 @@
+name: 🚀 Release & Deploy
+
+# ─────────────────────────────────────────────────────────────
+# TRIGGER: Push to main that changes manifest.json version
+# OR manually via GitHub UI (Actions → Run workflow)
+# ─────────────────────────────────────────────────────────────
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'fb-extension/manifest.json'   # only fires when you bump the version
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force release even if version unchanged'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: write      # create releases, push tags, commit changelog
+  pages: write         # deploy to GitHub Pages
+  id-token: write      # OIDC for Pages
+
+jobs:
+
+  # ═══════════════════════════════════════════════════════════
+  # JOB 1 — Read version from manifest.json
+  # ═══════════════════════════════════════════════════════════
+  read-version:
+    name: 📋 Read Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get.outputs.version }}
+      tag:     ${{ steps.get.outputs.tag }}
+      already_exists: ${{ steps.check.outputs.already_exists }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version from manifest.json
+        id: get
+        run: |
+          VERSION=$(jq -r '.version' fb-extension/manifest.json)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION"    >> $GITHUB_OUTPUT
+          echo "📦 Version: $VERSION"
+
+      - name: Check if tag already exists
+        id: check
+        run: |
+          TAG="v$(jq -r '.version' fb-extension/manifest.json)"
+          if git ls-remote --tags origin | grep -q "refs/tags/$TAG$"; then
+            echo "already_exists=true" >> $GITHUB_OUTPUT
+            echo "⚠️ Tag $TAG already exists — skipping release"
+          else
+            echo "already_exists=false" >> $GITHUB_OUTPUT
+            echo "✅ Tag $TAG is new — proceeding"
+          fi
+
+  # ═══════════════════════════════════════════════════════════
+  # JOB 2 — Build the extension ZIP
+  # ═══════════════════════════════════════════════════════════
+  build:
+    name: 📦 Build Extension ZIP
+    runs-on: ubuntu-latest
+    needs: read-version
+    if: needs.read-version.outputs.already_exists == 'false' || github.event.inputs.force == 'true'
+    outputs:
+      zip_name: ${{ steps.zip.outputs.zip_name }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set version vars
+        run: |
+          echo "VERSION=${{ needs.read-version.outputs.version }}" >> $GITHUB_ENV
+          echo "TAG=${{ needs.read-version.outputs.tag }}"         >> $GITHUB_ENV
+
+      - name: Package extension
+        id: zip
+        run: |
+          ZIP_NAME="fb-friend-manager-pro-v${VERSION}.zip"
+          echo "zip_name=$ZIP_NAME" >> $GITHUB_OUTPUT
+
+          # Zip only the fb-extension folder contents (manifest.json at root of zip)
+          cd fb-extension
+          zip -r "../$ZIP_NAME" . -x "*.DS_Store" -x "*/.git/*"
+          cd ..
+
+          echo "✅ Built: $ZIP_NAME ($(du -sh $ZIP_NAME | cut -f1))"
+          ls -lh "$ZIP_NAME"
+
+      - name: Upload ZIP as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-zip
+          path: fb-friend-manager-pro-v${{ env.VERSION }}.zip
+          retention-days: 1
+
+  # ═══════════════════════════════════════════════════════════
+  # JOB 3 — Update landing page with new version + changelog
+  # ═══════════════════════════════════════════════════════════
+  update-docs:
+    name: 📝 Update Landing Page
+    runs-on: ubuntu-latest
+    needs: [read-version, build]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update version badge in docs/index.html
+        run: |
+          VERSION="${{ needs.read-version.outputs.version }}"
+          TAG="${{ needs.read-version.outputs.tag }}"
+          DATE=$(date '+%b %Y')
+
+          # Update version badge text in hero section
+          sed -i "s|<div class=\"version-badge\">v[0-9]*\.[0-9]*\.[0-9]*</div>|<div class=\"version-badge\">${TAG}</div>|g" docs/index.html
+
+          # Update eyebrow line "Chrome Extension · vX.X.X · Free..."
+          sed -i "s|Chrome Extension · v[0-9]*\.[0-9]*\.[0-9]* · Free|Chrome Extension · ${TAG} · Free|g" docs/index.html
+
+          # Update download button label
+          sed -i "s|↓ Download v[0-9]*\.[0-9]*\.[0-9]*|↓ Download ${TAG}|g" docs/index.html
+
+          echo "✅ docs/index.html updated to $TAG"
+
+      - name: Inject new changelog entry into docs/index.html
+        run: |
+          VERSION="${{ needs.read-version.outputs.version }}"
+          TAG="${{ needs.read-version.outputs.tag }}"
+          DATE=$(date '+%b %Y')
+
+          # Read the RELEASE_NOTES env var if set, otherwise use a default
+          NOTES="${{ github.event.head_commit.message }}"
+          NOTES_ESCAPED=$(echo "$NOTES" | head -1 | sed 's/[&/\]/\\&/g')
+
+          # Build the new changelog HTML block
+          NEW_ENTRY="
+              <!-- $TAG -->
+              <div class=\"cl-entry reveal\">
+                <div class=\"cl-meta\">
+                  <span class=\"cl-version\">$TAG</span>
+                  <span class=\"cl-date\">$DATE</span>
+                </div>
+                <div class=\"cl-dot\"></div>
+                <div class=\"cl-card\">
+                  <div class=\"cl-type minor\">Release</div>
+                  <ul class=\"cl-items\">
+                    <li>$NOTES_ESCAPED</li>
+                  </ul>
+                </div>
+              </div>"
+
+          # Insert after the opening of changelog-timeline div
+          python3 -c "
+          import re, sys
+
+          with open('docs/index.html', 'r') as f:
+              content = f.read()
+
+          marker = '<div class=\"changelog-timeline\" style=\"margin-top:56px;\">'
+          new_block = '''$NEW_ENTRY'''
+          content = content.replace(marker, marker + new_block, 1)
+
+          with open('docs/index.html', 'w') as f:
+              f.write(content)
+          print('✅ Changelog entry injected')
+          "
+
+      - name: Commit updated docs
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/index.html
+          git diff --staged --quiet || git commit -m "docs: update landing page for ${{ needs.read-version.outputs.tag }}"
+          git push
+
+  # ═══════════════════════════════════════════════════════════
+  # JOB 4 — Create GitHub Release + attach ZIP
+  # ═══════════════════════════════════════════════════════════
+  release:
+    name: 🏷 Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [read-version, build, update-docs]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main   # pull latest after docs commit
+
+      - name: Download ZIP artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: extension-zip
+
+      - name: Create Git tag
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag ${{ needs.read-version.outputs.tag }}
+          git push origin ${{ needs.read-version.outputs.tag }}
+
+      - name: Generate release notes from commits
+        id: notes
+        run: |
+          # Get commits since last tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            LOG=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s" --no-merges | head -20)
+          else
+            LOG=$(git log --pretty=format:"- %s" --no-merges | head -20)
+          fi
+
+          echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
+          echo "## What's Changed" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo "$LOG" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo "---" >> $GITHUB_OUTPUT
+          echo "**Full changelog:** https://fbfm.zeroboolean.com/#changelog" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo "## Installation" >> $GITHUB_OUTPUT
+          echo "1. Download \`fbfm-${{ needs.read-version.outputs.tag }}.zip\` below" >> $GITHUB_OUTPUT
+          echo "2. Extract the ZIP" >> $GITHUB_OUTPUT
+          echo "3. Go to \`chrome://extensions\` → Enable Developer Mode → Load Unpacked" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name:   ${{ needs.read-version.outputs.tag }}
+          name:       "FB Friend Manager Pro ${{ needs.read-version.outputs.tag }}"
+          body:       ${{ steps.notes.outputs.RELEASE_NOTES }}
+          draft:      false
+          prerelease: false
+          files:      fbfm-${{ needs.read-version.outputs.version }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ═══════════════════════════════════════════════════════════
+  # JOB 5 — Deploy GitHub Pages
+  # ═══════════════════════════════════════════════════════════
+  deploy-pages:
+    name: 🌐 Deploy GitHub Pages
+    runs-on: ubuntu-latest
+    needs: [release]
+    environment:
+      name: github-pages
+      url:  ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main   # get latest after all commits
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
